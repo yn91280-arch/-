@@ -1,0 +1,161 @@
+# =========================
+# Elite Quiz Bot
+# Developer: YOU
+# =========================
+
+import asyncio
+import random
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+# =========================
+# ⚙️ الإعدادات (عدّل هنا)
+# =========================
+
+BOT_TOKEN = "7823346543:AAHk9i4tbybS4-c6wf0P1SFXzD0CX5miZQ0"   # 🔑 توكن البوت
+DEVELOPER_ID = 8518059888              # 👑 ايدي المطور (8518059888)
+
+QUIZ_TIME = 15  # ⏱️ وقت السؤال بالثواني
+
+# =========================
+# البيانات
+# =========================
+
+questions = [
+    {
+        "q": "ما هي عاصمة مصر؟",
+        "options": ["القاهرة", "الإسكندرية", "الجيزة", "أسوان"],
+        "answer": "القاهرة"
+    },
+    {
+        "q": "كم عدد كواكب المجموعة الشمسية؟",
+        "options": ["7", "8", "9", "10"],
+        "answer": "8"
+    },
+    {
+        "q": "لغة برمجة البوتات في تيليجرام غالبًا؟",
+        "options": ["Python", "HTML", "CSS", "SQL"],
+        "answer": "Python"
+    }
+]
+
+scores = {}          # {user_id: points}
+answered_users = set()
+current_answer = None
+quiz_running = False
+
+# =========================
+# تشغيل البوت
+# =========================
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+# =========================
+# أوامر عامة
+# =========================
+
+@dp.message(Command("start"))
+async def start_cmd(message: types.Message):
+    await message.reply(
+        "🎯 أهلاً بك في بوت المسابقات الاحترافي!\n\n"
+        "📌 الأوامر:\n"
+        "/quiz ➜ بدء مسابقة\n"
+        "/score ➜ نقاطك\n"
+        "/top ➜ المتصدرين 🏆"
+    )
+
+@dp.message(Command("score"))
+async def my_score(message: types.Message):
+    pts = scores.get(message.from_user.id, 0)
+    await message.reply(f"⭐ نقاطك الحالية: {pts}")
+
+@dp.message(Command("top"))
+async def top_users(message: types.Message):
+    if not scores:
+        await message.reply("لا يوجد نقاط بعد ❌")
+        return
+
+    top = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+    text = "🏆 المتصدرين:\n\n"
+    for i, (uid, pts) in enumerate(top, start=1):
+        text += f"{i}. ID:{uid} ➜ {pts} نقطة\n"
+
+    await message.reply(text)
+
+# =========================
+# أوامر المطور
+# =========================
+
+@dp.message(Command("quiz"))
+async def start_quiz(message: types.Message):
+    global quiz_running, answered_users, current_answer
+
+    if message.from_user.id != DEVELOPER_ID:
+        await message.reply("⛔ الأمر للمشرف فقط")
+        return
+
+    if quiz_running:
+        await message.reply("⚠️ مسابقة شغالة بالفعل")
+        return
+
+    quiz_running = True
+    answered_users.clear()
+
+    q = random.choice(questions)
+    current_answer = q["answer"]
+
+    buttons = [
+        [InlineKeyboardButton(text=opt, callback_data=opt)]
+        for opt in q["options"]
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await message.answer(
+        f"🧠 سؤال المسابقة:\n\n{q['q']}\n\n⏱️ لديك {QUIZ_TIME} ثانية!",
+        reply_markup=keyboard
+    )
+
+    await asyncio.sleep(QUIZ_TIME)
+
+    quiz_running = False
+    await message.answer(f"⏰ انتهى الوقت!\n✅ الإجابة الصحيحة: {current_answer}")
+
+# =========================
+# الإجابات
+# =========================
+
+@dp.callback_query()
+async def handle_answer(call: types.CallbackQuery):
+    global quiz_running
+
+    if not quiz_running:
+        await call.answer("⏱️ لا توجد مسابقة حالياً", show_alert=True)
+        return
+
+    uid = call.from_user.id
+
+    if uid in answered_users:
+        await call.answer("❌ أجبت بالفعل", show_alert=True)
+        return
+
+    answered_users.add(uid)
+
+    if call.data == current_answer:
+        scores[uid] = scores.get(uid, 0) + 10
+        await call.answer("✅ إجابة صحيحة! +10 نقاط", show_alert=True)
+    else:
+        await call.answer("❌ إجابة خاطئة", show_alert=True)
+
+# =========================
+# تشغيل
+# =========================
+
+async def main():
+    print("🔥 Elite Quiz Bot is running...")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
